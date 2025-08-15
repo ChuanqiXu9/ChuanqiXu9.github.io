@@ -40,4 +40,4 @@ gem 'liquid', '~> 4.0'
 gem "webrick"
 
 gem "jekyll-theme-minimal"
-
+gem 'jekyll-toc'

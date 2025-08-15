@@ -29,6 +29,7 @@ github_username:  ChuanqiXu9
 theme: minima
 plugins:
   - jekyll-feed
+  - jekyll-toc
 
 google_analytics: G-TD29E216S3
 
