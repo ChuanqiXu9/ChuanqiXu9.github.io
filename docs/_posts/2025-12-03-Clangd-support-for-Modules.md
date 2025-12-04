@@ -584,7 +584,9 @@ bool IsModuleFilesUpToDate(
 ## 相关 Patch
 
 [1] https://github.com/llvm/llvm-project/pull/66462
+
 [2] https://github.com/llvm/llvm-project/pull/106683
+
 [3] https://github.com/llvm/llvm-project/pull/125988
 
 # Future TODOs

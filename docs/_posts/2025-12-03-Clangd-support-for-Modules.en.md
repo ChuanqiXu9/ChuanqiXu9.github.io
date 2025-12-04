@@ -637,7 +637,9 @@ The biggest drawback of this approach is that loading BMIs is expensive. There i
 ## Related Patches
 
 [1] https://github.com/llvm/llvm-project/pull/66462
+
 [2] https://github.com/llvm/llvm-project/pull/106683
+
 [3] https://github.com/llvm/llvm-project/pull/125988
 
 
