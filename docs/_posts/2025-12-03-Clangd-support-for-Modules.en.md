@@ -634,6 +634,13 @@ bool IsModuleFilesUpToDate(
 
 The biggest drawback of this approach is that loading BMIs is expensive. There is room for substantial optimization here.
 
+## Related Patches
+
+[1] https://github.com/llvm/llvm-project/pull/66462
+[2] https://github.com/llvm/llvm-project/pull/106683
+[3] https://github.com/llvm/llvm-project/pull/125988
+
+
 # Future TODOs
 
 We’ve now described the current design and status of C++20 Modules support in Clangd. If you run into issues, you can try to reason about them based on this description and perhaps fix them yourself. Besides bug fixes, there are also various optimizations and features that can be added.
