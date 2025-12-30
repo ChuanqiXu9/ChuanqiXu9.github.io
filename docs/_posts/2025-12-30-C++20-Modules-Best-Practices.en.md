@@ -19,6 +19,8 @@ This discussion can be divided into two parts: how to provide C++20 Modules wrap
 
 I have tried to make each section of this blog post self-contained, so readers with different interests can skip content that doesn't appeal to them. For example, if you want to start a new project using C++20 Modules, you can just read the sections on "Modules Native," which are actually the simplest part. Or, if you and your users don't care about ABI, you can skip the ABI-related sections.
 
+ABI compatibility is a crucial aspect of C++. As a foundational new feature, C++20 Modules must account for ABI compatibility, which introduces significant complexity. However, many C++ users today don't concern themselves with ABI compatibility because they build everything from source—in such cases, much of this article can be skipped.
+
 # Benefits of C++20 Modules
 
 Before introducing the practices, let's first outline the benefits of C++20 Modules to provide context for the different approaches we'll discuss later. The main design goals of C++20 Modules are:
