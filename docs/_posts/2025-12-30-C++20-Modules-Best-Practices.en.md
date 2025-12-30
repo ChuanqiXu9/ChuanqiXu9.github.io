@@ -676,21 +676,23 @@ The simplest way to solve this is to use module implementation partition units f
 
 ```C++
 // network.cpp
-module example:network;
+module example:network.impl;
 // define network interfaces...
 ```
 
 ```C++
 // common.cpp
-module example:common;
+module example:common.impl;
 // define common interfaces...
 ```
 
 ```C++
 // util.cpp
-module example:util;
+module example:util.impl;
 // define util interfaces...
 ```
+
+(We can't have duplicated partition name in the same module.)
 
 This way, the file-level dependencies in the modules version are at least not a regression compared to the header file version.
 

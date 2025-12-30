@@ -681,21 +681,23 @@ export import :util;
 
 ```C++
 // network.cpp
-module example:network;
+module example:network.impl;
 // define network interfaces...
 ```
 
 ```C++
 // common.cpp
-module example:common;
+module example:common.impl;
 // define common interfaces...
 ```
 
 ```C++
 // util.cpp
-module example:util;
+module example:util.impl;
 // define util interfaces...
 ```
+
+(同一个 module 内我们不能有重名的 partition unit。)
 
 通过这种方式，起码 Modules 下的文件级依赖起码比起头文件版本，不算是 regression 了。
 
