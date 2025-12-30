@@ -874,3 +874,17 @@ Setting aside ABI stability, we have found in practice that this approach, combi
 # Conclusion
 
 Overall, C++20 Modules are quite simple from a language feature perspective compared to other major C++ features. Looking back at this article, most of the content is about how to provide C++20 Modules support while maintaining compatibility with header files, and about ABI-related topics. If you don't care about ABI or are aggressive enough to write a Modules Native project from scratch, you should encounter relatively few language-level problems.
+
+Following off are some comments on the Reddit, but I feel good enough as the summary here:
+
+(1) In both design and practice, modules can deliver significantly greater compile-time speedups compared to precompiled headers (PCH). Additionally, named modules can reduce the size of build artifacts—something PCH simply cannot do.
+
+(2) The encapsulation provided by modules enables finer-grained dependency and recompilation analysis. Some of this work has already been open-sourced—for example: https://clang.llvm.org/docs/StandardCPlusPlusModules.html#experimental-non-cascading-changes. We have even more such efforts internally, which we plan to gradually open-source in the future.
+
+(3) Moreover, the ability of named modules to detect ODR (One Definition Rule) violations genuinely impressed me. I was already aware of, understood, and had personally encountered various ODR violation issues before. However, during our migration, discovering so many previously hidden ODR violations was still quite shocking.
+
+(4) Regarding complexity, I suspect the perception that C++20 modules are overly complicated stems largely from their long implementation journey and the abundance of (sometimes conflicting) articles written about them. But if we set aside build system integration for a moment, the language-level features of C++20 modules are actually quite straightforward—even simpler than header files once you get used to them. I believe I’m well-positioned to say this: we completed our native C++20 modules migration back in early 2025. Most developers adapted quickly; after an initial ramp-up period where they occasionally came to me with questions, I now rarely receive any module-related inquiries. In my experience, for a large project, you only need one or two people to handle the build system and framework setup—the rest of the team can simply follow established best practices. From this standpoint, C++20 modules haven’t introduced meaningful additional burden to C++ development.
+
+(5) As for toolchains, it’s true that C++20 modules have had a massive impact, and their implementation and practical adoption have indeed taken a very long time. I fully understand why users—especially those who’ve been closely following C++20 modules’ progress—might feel fatigued. But while we may not be moving fast, we’ve never stopped moving forward. One motivation behind writing this blog post was precisely to create content with longer-lasting relevance. I noticed that many articles commenting on the state of toolchains from just a year ago are already outdated. That’s why I wrote this piece—from a user’s perspective on modules.
+
+As for migration cost, of course, opinions will vary. But based on my experience, it’s a one-shot effort: once you go through it once, you’re essentially done.
