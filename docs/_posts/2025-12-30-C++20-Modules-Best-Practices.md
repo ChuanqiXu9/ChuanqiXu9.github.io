@@ -915,7 +915,7 @@ export import :...; // other partitions
 
 整体上 C++20 Modules 相比于其他 C++ 的大特性而言，在语言特性角度还是很简单的。回顾这篇文章，其实大部分内容在介绍如何兼容头文件的情况下提供 C++20 Modules 以及 ABI 相关内容。如果不关心 ABI 或者非常激进，愿意直接编写 Modules Natively 项目的话，遇到的语言角度的问题应该还是比较少的。
 
-以下我是 Reddit 上的评论，我觉得在这里作为总结很合适：
+以下是 Reddit 上我的评论，我觉得在这里作为总结很合适：
 
 1. 在设计和实践中，相比于 PCH，Modules 可以提升更多的编译速度，同时 Named Modules 还能减少构建产物体积，这是 PCH 做不到的。
 

@@ -875,7 +875,7 @@ Setting aside ABI stability, we have found in practice that this approach, combi
 
 Overall, C++20 Modules are quite simple from a language feature perspective compared to other major C++ features. Looking back at this article, most of the content is about how to provide C++20 Modules support while maintaining compatibility with header files, and about ABI-related topics. If you don't care about ABI or are aggressive enough to write a Modules Native project from scratch, you should encounter relatively few language-level problems.
 
-Following off are some comments on the Reddit, but I feel good enough as the summary here:
+Below is my comment on Reddit, which I think serves as a fitting summary here:
 
 (1) In both design and practice, modules can deliver significantly greater compile-time speedups compared to precompiled headers (PCH). Additionally, named modules can reduce the size of build artifacts—something PCH simply cannot do.
 
