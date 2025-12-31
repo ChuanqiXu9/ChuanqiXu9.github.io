@@ -888,3 +888,171 @@ Below is my comment on Reddit, which I think serves as a fitting summary here:
 (5) As for toolchains, it’s true that C++20 modules have had a massive impact, and their implementation and practical adoption have indeed taken a very long time. I fully understand why users—especially those who’ve been closely following C++20 modules’ progress—might feel fatigued. But while we may not be moving fast, we’ve never stopped moving forward. One motivation behind writing this blog post was precisely to create content with longer-lasting relevance. I noticed that many articles commenting on the state of toolchains from just a year ago are already outdated. That’s why I wrote this piece—from a user’s perspective on modules.
 
 As for migration cost, of course, opinions will vary. But based on my experience, it’s a one-shot effort: once you go through it once, you’re essentially done.
+
+# Appendix A: An Example of an ODR Violation Causing Runtime Issues
+
+Someone requested to see a concrete example where an ODR (One Definition Rule) violation leads to runtime problems, as they believed such violations usually surface during compilation or linking.
+
+Initially, I didn’t provide a specific example because this issue fundamentally stems from early design decisions in Linux and C—C++ merely inherited these behaviors while maintaining C compatibility. Moreover, I don't think these issues are inherently related to Modules; rather, our refactoring process happened to expose them. Other types of refactoring could similarly trigger such problems. In fact, many developers even treat this behavior as a feature—for instance, controlling which function gets called by manipulating the link order.
+
+Let’s start with a simple example:
+
+We have a low-level dependency interface:
+
+```cpp
+// interface.h
+#pragma once
+
+const char *func();
+```
+
+And two different implementations (the root of all evil!):
+
+```cpp
+// impl_v1.cc
+#include "interface.h"
+
+const char *func() {
+    return "v1";
+}
+```
+
+```cpp
+// impl_v2.cc
+#include "interface.h"
+
+const char *func() {
+    return "v2";
+}
+```
+
+We also have a wrapper around this interface. For simplicity, let’s make it deliberately naive:
+
+```cpp
+// wrapper.h
+#include "interface.h"
+
+class Wrapper {
+public:
+    const char *func();
+    const char *inlined() {
+        return ::func();
+    }
+};
+```
+
+Correspondingly, this wrapper layer is compiled into its own library. During development of this library, it was built against the v2 implementation.
+
+```cpp
+// wrapper.cc
+#include "wrapper.h"
+
+const char *Wrapper::func() {
+    return inlined();
+}
+```
+
+Finally, we have our executable program:
+
+```cpp
+// main.cc
+#include "wrapper.h"
+#include <iostream>
+
+int main() {
+    Wrapper W;
+    std::cout << W.inlined() << std::endl;
+    return 0;
+}
+```
+
+Our executable expects to depend on the `v1` implementation. Now let's compile this simple case:
+
+```sh
+$ clang++ -std=c++20 impl_v1.cc -fPIC -c -o impl_v1.o
+$ llvm-ar rcs libv1.a impl_v1.o
+$ clang++ -std=c++20 impl_v2.cc -fPIC -c -o impl_v2.o
+$ llvm-ar rcs libv2.a impl_v2.o
+$ clang++ -std=c++20 wrapper.cc -fPIC -c -o wrapper.o
+$ clang++ -shared -o libwrapper.so wrapper.o
+$ clang++ -std=c++20 main.cc -fPIC -c -o main.o
+$ clang++ -std=c++20 main.o -L. -lv1 -lwrapper -lv2 -o main
+$ ./main
+v1
+```
+
+In the final linking step, `-lv1` appears first because we want the executable to use the `v1` implementation. The trailing `-lv2` comes indirectly through the dependencies of the `wrapper` library.
+
+Okay, now let's refactor this small project to use C++ Modules. We can treat `interface.h`, `impl_v1.cc`, and `impl_v2.cc` as third-party libraries, minimizing changes. We only need to modify the wrapper layer:
+
+```cpp
+// wrapper.cppm
+module;
+#include "interface.h" // Alternatively, you could wrap 'interface' as described in the main text and import it.
+export module wrapper;
+
+export class Wrapper {
+public:
+    const char *func();
+    const char *inlined() {
+        return ::func();
+    }
+};
+```
+
+```cpp
+// wrapper-part.cpp (implementation unit)
+module wrapper;
+
+const char *Wrapper::func() {
+    return inlined();
+}
+```
+
+```cpp
+// main.cc
+#include <iostream>
+import wrapper;
+
+int main() {
+    Wrapper W;
+    std::cout << W.inlined() << std::endl;
+    return 0;
+}
+```
+
+Now let's compile and run it:
+
+```sh
+$ clang++ -std=c++20 impl_v1.cc -fPIC -c -o impl_v1.o
+$ llvm-ar rcs libv1.a impl_v1.o
+$ clang++ -std=c++20 impl_v2.cc -fPIC -c -o impl_v2.o
+$ llvm-ar rcs libv2.a impl_v2.o
+$ clang++ -std=c++20 wrapper.cppm -fPIC -fmodule-output=wrapper.pcm -c -o wrapper.cppm.o
+$ clang++ -std=c++20 wrapper-part.cpp -fPIC -fmodule-file=wrapper=wrapper.pcm -c -o wrapper-part.o
+$ clang++ -shared -o libwrapper.so wrapper.cppm.o wrapper-part.o
+$ clang++ -std=c++20 main.cc -fPIC -c -o main.o -fmodule-file=wrapper=wrapper.pcm
+$ clang++ -std=c++20 main.o -L. -lv1 -lwrapper -lv2 -o main
+$ ./main
+v2
+```
+
+Surprisingly, the output of `main` has changed!
+
+This behavior fundamentally relates to how the linker handles static libraries: static linking pulls in only what’s needed, not the entire contents of a static library. In this example, after modularizing, the binary produced from `main.cc` no longer has any direct dependency on `impl_v1.cc`, causing the linker to skip `libv1.a`.
+
+However, we shouldn’t get overly bogged down in these details. Dependency graphs in large C++ projects are extremely complex, and beyond this simple case, there are numerous other ways such issues can manifest. Trying to untangle all binary dependencies thoroughly is both difficult and unnecessary—because the root cause is crystal clear: an ODR violation.
+
+As for fixes, the best approach is obviously to resolve the underlying ODR violation itself. If that’s not feasible, another strategy is to enforce explicit dependencies wherever possible. For example, instead of having just one `libwrapper`, we could (assuming program logic permits) create multiple versions:
+
+(fake build scripts)
+```
+add_library(libwrapper_v1 SOURCES wrapper.cppm wrapper-part.cpp DEPENDS v1)
+add_library(libwrapper_v2 SOURCES wrapper.cppm wrapper-part.cpp DEPENDS v2)
+
+add_executable(main SOURCES main.cc DEPENDS libwrapper_v1)
+```
+
+That said, I believe each case needs individual assessment—it’s hard to devise a universal solution if we don’t fix the ODR violation at its source.
+
+The key point here is to highlight Modules’ ability to expose existing ODR violations.

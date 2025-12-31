@@ -929,3 +929,169 @@ export import :...; // other partitions
 
 关于切换的成本，这个自然是见仁见智。只是我的经验是，这是一次 OneShot 努力，只要努力过一次就没有问题了。
 
+# Appendix A: 一个 ODR Violation 导致运行时问题的例子
+
+有人反应希望看到一个 ODR Violation 导致运行时问题的例子，因为他觉得 ODR Violation 问题一般会在编译时或链接时暴露出来。
+
+我一开始没有写具体的例子因为这个问题本身甚至来源于 Linux 和 C 早期的设计，C++ 之前只是在兼容 C 的过程中也把这些东西兼容过来了。我也不觉得这些问题本身和 Modules 有关系，只是我们在改造的过程中触发了而已，其他类型的重构也有可能触发这类问题。而且甚至很多人把这作为 feature 使用，例如通过控制链接顺序控制实际调用的函数。
+
+我们先看一个简单的例子：
+
+我们有一个底层依赖接口
+
+```C++
+// interface.h
+#pragma once
+
+const char *func();
+```
+
+然后有两个不同版本的实现（万恶之源！）：
+
+```C++
+// impl_v1.cc
+#include "interface.h"
+
+const char *func() {
+    return "v1";
+}
+```
+
+```C++
+// impl_v2.cc
+#include "interface.h"
+
+const char *func() {
+    return "v2";
+}
+```
+
+我们对这个接口有一些封装，为了简洁，让我们把这个接口写得傻一点：
+
+```C++
+// wrapper.h
+#include "interface.h"
+
+class Wrapper {
+public:
+    const char *func();
+    const char *inlined() {
+        return ::func();
+    }
+};
+```
+
+相应的，这个封装层也有一个实现的库。这个库开发时依赖的是 v2 的逻辑。
+
+```C++
+// wrapper.cc
+#include "wrapper.h"
+
+const char *Wrapper::func() {
+    return inlined();
+}
+```
+
+最后是我们的执行程序
+
+```C++
+// main.cc
+#include "wrapper.h"
+#include <iostream>
+
+int main() {
+    Wrapper W;
+    std::cout << W.inlined() << std::endl;
+    return 0;
+}
+```
+
+我们的执行程序期望依赖于 `v1` 的实现。然后让我们编译这个简单的 case:
+
+```
+$ clang++ -std=c++20 impl_v1.cc -fPIC -c -o impl_v1.o
+$ llvm-ar rcs libv1.a impl_v1.o
+$ clang++ -std=c++20 impl_v2.cc -fPIC -c -o impl_v2.o
+$ llvm-ar rcs libv2.a impl_v2.o
+$ clang++ -std=c++20 wrapper.cc -fPIC -c -o wrapper.o
+$ clang++ -shared -o libwrapper.so wrapper.o
+$ clang++ -std=c++20 main.cc -fPIC -c -o main.o
+$ clang++ -std=c++20 main.o -L. -lv1 -lwrapper -lv2  -o main
+$ ./main
+v1
+```
+
+在最后链接处，`-lv1` 在最前面因为我们希望执行程序依赖 `v1`。最后的 `-lv2` 是从 `wrapper` 库的依赖里连带过来的。
+
+Ok，然后让我们对这个小项目做 Module 化改造，我们可以将 `interface.h`、`impl_v1.cc` 和 `impl_v2.cc` 当作三方库，这样改动会更少一些。然后我们只需要对 wrapper 层做改造即可：
+
+```C++
+// wrapper.cppm
+module;
+#include "interface.h" // 你也可以用本文提到的方式封装 interface，然后使用 import
+export module wrapper;
+
+export class Wrapper {
+public:
+    const char *func();
+    const char *inlined() {
+        return ::func();
+    }
+};
+
+```
+
+```C++
+module wrapper;
+
+const char *Wrapper::func() {
+    return inlined();
+}
+```
+
+```C++
+#include <iostream>
+import wrapper;
+
+int main() {
+    Wrapper W;
+    std::cout << W.inlined() << std::endl;
+    return 0;
+}
+```
+
+然后让我们编译运行:
+
+```C++
+$ clang++ -std=c++20 impl_v1.cc -fPIC -c -o impl_v1.o
+$ llvm-ar rcs libv1.a impl_v1.o
+$ clang++ -std=c++20 impl_v2.cc -fPIC -c -o impl_v2.o
+$ llvm-ar rcs libv2.a impl_v2.o
+$ clang++ -std=c++20 wrapper.cppm -fPIC -fmodule-output=wrapper.pcm -c -o wrapper.cppm.o
+$ clang++ -std=c++20 wrapper.cc -fPIC -fmodule-file=wrapper=wrapper.pcm -c -o wrapper.o
+$ clang++ -shared -o libwrapper.so wrapper.cppm.o wrapper.o
+$ clang++ -std=c++20 main.cc -fPIC -c -o main.o -fmodule-file=wrapper=wrapper.pcm
+$ clang++ -std=c++20 main.o -L. -lv1 -lwrapper -lv2  -o main
+$ ./main
+v2
+```
+
+然后我们就会神奇的发现，main 的执行结果发生变化了！
+
+这本质和链接器处理静态库的方式有关系，静态链接不会把静态库的所有东西拿过来，而只会按需进行链接。然后在这个例子中，module 改造后的 `main.cc` 二进制上不再和 `impl_v1.cc` 有任何直接依赖，导致链接器跳过了 `libv1.a`。
+
+但我们不必过于追求这里的细节，大型 C++ 程序的依赖极其复杂，除了这里的简单 case 外也有很多其他的触发方式。我觉得想在二进制依赖层面把这些问题全部里理清很困难也没有必要。因为这里的根因是非常清楚的，就是 ODR Violation。
+
+至于 fix，最佳的手段当然是修复根本的 ODR Violation。在我们无法修复 ODR Violation 时，尽可能尽可能使用显式依赖也是另一个办法，例如之前我们可能只有一个 `libwrapper`，现在我们可以（假设程序逻辑允许），我们可以设计多个 libwrapper:
+
+(fake build scritps)
+```
+add_library(libwrapper_v1 SOURCES wrapper.cppm wrapper.cc DEPENDS v1)
+add_library(libwrapper_v2 SOURCES wrapper.cppm wrapper.cc DEPENDS v2)
+
+add_executable(main SOURCES main.cc DEPENDS libwrapper_v1)
+```
+
+不过我觉得这些问题需要 case by case 的看，我感觉很难有统一的解决方案，如果我们不去修复 ODR Violation 的话。
+
+这里主要是想强调下 Modules 发现 ODR Violation 的能力。
