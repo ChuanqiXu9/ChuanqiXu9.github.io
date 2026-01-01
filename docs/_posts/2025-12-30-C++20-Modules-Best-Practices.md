@@ -1124,8 +1124,7 @@ add_executable(main SOURCES main.cc DEPENDS libwrapper_v1)
 1. 标准说明
 2. 标准为什么这么制订
 3. Clang 的选择以及现状
-4. 好例子
-5. 总结
+4. 总结
 
 ## 标准说明
 

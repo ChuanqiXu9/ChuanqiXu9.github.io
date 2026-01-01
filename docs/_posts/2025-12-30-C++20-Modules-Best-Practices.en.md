@@ -1085,8 +1085,7 @@ Returning to the main topic, to clarify the rationale behind this guideline, thi
 1. Standard Specification  
 2. Why the Standard Is Defined This Way  
 3. Clang’s Choice and Current State  
-4. Good Examples  
-5. Summary  
+4. Summary  
 
 ## Standard Specification
 
