@@ -120,7 +120,7 @@ Clang 推荐 Module Interface 文件以 `.cppm` 作为后缀名。MSVC 推荐 `.
 
 # 为基于头文件的项目提供 C++20 Modules Interface
 
-（更简洁的版本位于 https://clang.llvm.org/docs/StandardCPlusPlusModules.html#transitioning-to-modules）
+（更简洁的版本位于 [transitioning-to-modules](https://clang.llvm.org/docs/StandardCPlusPlusModules.html#transitioning-to-modules）)
 
 我们使用一个简单项目作为例子：
 
@@ -599,7 +599,7 @@ FetchContent_MakeAvailable(async_simple)
 
 # Modules Native Best Practice
 
-一些背景知识可以在这里查看：https://clang.llvm.org/docs/StandardCPlusPlusModules.html#background-and-terminology
+一些背景知识可以在这里查看：[background-and-terminology](https://clang.llvm.org/docs/StandardCPlusPlusModules.html#background-and-terminology)
 
 ## 一个项目只声明一个 Module，需要有多个 TU 时使用 Module Partition Unit
 
@@ -919,7 +919,7 @@ export import :...; // other partitions
 
 1. 在设计和实践中，相比于 PCH，Modules 可以提升更多的编译速度，同时 Named Modules 还能减少构建产物体积，这是 PCH 做不到的。
 
-2. Modules 的隔离性让我们可以做更细粒度的依赖分析和重编译分析。已经开源的部分例如 https://clang.llvm.org/docs/StandardCPlusPlusModules.html#experimental-non-cascading-changes 。我们在内部还有更多这样的工作，我们后续也会逐渐开放出来。
+2. Modules 的隔离性让我们可以做更细粒度的依赖分析和重编译分析。已经开源的部分例如 [experimental-non-cascading-changes](https://clang.llvm.org/docs/StandardCPlusPlusModules.html#experimental-non-cascading-changes) 。我们在内部还有更多这样的工作，我们后续也会逐渐开放出来。
 
 3. 此外 Named Modules 发现 ODR 问题的能力确实让我眼前一亮。我之前就知道、理解和经历过一些 ODR Violation 问题。但在改造过程中发现如此多的 ODR Violation 问题还是让我震惊。
 
@@ -1095,3 +1095,200 @@ add_executable(main SOURCES main.cc DEPENDS libwrapper_v1)
 不过我觉得这些问题需要 case by case 的看，我感觉很难有统一的解决方案，如果我们不去修复 ODR Violation 的话。
 
 这里主要是想强调下 Modules 发现 ODR Violation 的能力。
+
+# Appendix B: 为什么不要在 module interface units 中 import module implementation partition unit
+
+因为有人对这个问题有疑惑，所以这里再深入说明下。
+
+这里在 Appendix 中说明是因为要把这个事情说清楚需要涉及到标准视角以及实现视角。和本文标题中的用户视角有点矛盾了。
+
+我强调用户视角的原因是，我觉得对绝大多数 C++ 程序员而言，他们希望 Modules 会是一个帮助他们控制复杂度的特性而不是另一个带来心智负担的东西。这也是本文的目的，强调大多数 C++ 程序员，当工具链不止成熟，而且极易使用的时候，他们不会因为在语言特性角度对 Modules 产生压力。
+
+所以对于不关心标准和实现的读者，这里的 take away 是：
+
+- 在 module interface units 中 import module implementation partition unit 不是一个语言级别的错误。只是一个减少理解负担的 guide line。
+- 但实践中如果我们允许在 module interface units 中 import module implementation partition unit，很多程序员很容易不经意间写出在标准中 unspecified 的行为。用原文说叫 “it is unspecified which are and under what circumstances”。特别是多人合作的超大型 C++ 项目。
+- 避免在 module interface units 中 import module implementation partition unit 可以避免这个问题。
+- 这对于程序员理解项目不同组件的 interface 和 implementation 的边界非常有帮助。特别是多人合作的超大型 C++ 项目。
+
+这里强调多人合作的 C++ 项目是因为，在我眼里，C++ 项目中的开发人员可以分为以下几个角色：
+
+1. 一部分人会负责准备好工具链、开发环境。当然他们也需要考虑项目的实际运行环境，这是准备工具链的基础。
+2. 一部分人会负责项目的 C++ 语言规范制订。C++ 过于复杂，很多项目会有自己的 C++ 规范。这些规范对于统一项目中的代码风格和减少项目成员理解代码的成本、提高项目可维护性都很有帮助。
+3. 其他更多的会关注项目的实际逻辑，C++ 此时主要是工具。
+
+当然在很多小项目或者一人项目中，这些角色可能是重合的。但当项目人数多了之后，没有一个项目 C++ 规范会导致项目可读性、可维护性显著下降。
+
+回到正题，为了说清楚这个 guide line 的原因，本节分为以下部分：
+
+1. 标准说明
+2. 标准为什么这么制订
+3. Clang 的选择以及现状
+4. 好例子
+5. 总结
+
+## 标准说明
+
+在正文中引用过一次，这里为了避免读者跳转，我们再引用一次：
+
+[module.reach]p2 提到：
+
+> All translation units that are necessarily reachable are reachable. Additional translation units on which the point within the program has an interface dependency may be considered reachable, but it is unspecified which are and under what circumstances.
+
+necessarily reachable 的定义在 [module.reach]p1:
+
+> A translation unit U is necessarily reachable from a point P if U is a module interface unit on which the translation unit containing P has an interface dependency, or the translation unit containing P imports U, in either case prior to P
+
+即 necessarily reachable 指的是直接 import 的 TU 或者有 interface dependency 的 TU。interface dependency 的定义在 [module.import]p10:
+
+> A translation unit has an interface dependency on a translation unit U if it contains a declaration that imports U or if it has an interface dependency on a translation unit that has an interface dependency on U.
+
+即 interface dependency 指的是 import 的 module interface unit 以及递归 import 的 module interface unit。
+
+然后 [module.reach]p3 提到:
+
+> A declaration D is reachable from a point P if
+> (3.1)
+> P is a non-synthesized point and
+> (3.1.1)
+> D appears prior to P in the same translation unit, or
+> (3.1.2)
+> D is not discarded ([module.global.frag]), appears in a translation unit that is reachable from P, and does not appear within a private-module-fragment; or
+
+这说明 module implementation partition unit 中的 decl 对于不直接 import module implementation partition unit 的 unit 而言，这些 decl 是否 reachable 是 unspecified under what circumstances。
+
+然后 [module.reach]p5 及其 note 提到：
+
+> The accumulated properties of all reachable declarations of an entity within a context determine the behavior of the entity within that context.
+
+> Note 4: These reachable semantic properties include type completeness, type definitions, initializers, default arguments of functions or template declarations, attributes, names bound, etc. Since default arguments are evaluated in the context of the call expression, the reachable semantic properties of the corresponding parameter types apply in that context.
+
+注脚82 提到：
+
+> Implementations are therefore not required to prevent the semantic effects of additional translation units involved in the compilation from being observed.
+
+我们用一个例子来说明：
+
+```C++
+module m:impl;
+struct Impl {};
+```
+
+```C++
+export module m;
+import :impl;
+export class interface {
+private:
+    Impl impl;
+public:
+    interface() = default;
+};
+```
+
+```C++
+// user.cpp
+import m;
+interface i;
+```
+
+用 clang 编译这个例子会输出（忽略 clang 编译 `m` 时的 warning）：
+
+```
+$ clang++ -std=c++20 user.cpp -fsyntax-only -fprebuilt-module-path=.
+In file included from user.cpp:1:
+interface.cppm:7:5: error: definition of 'Impl' must be imported from module 'm' before it is required
+    7 |     interface() = default;
+      |     ^
+user.cpp:2:11: note: in defaulted default constructor for 'interface' first required here
+    2 | interface i;
+      |           ^
+impl.cppm:2:8: note: definition here is not reachable
+    2 | struct Impl {};
+      |        ^
+1 error generated.
+```
+
+当然用其他编译器可能会接受这个例子。因为这是 unspecified under what circumstances 的嘛。
+
+然后让我们从标准层面看看这个 case。 clang 拒绝这个 case 的原因是，当我们在 `user.cpp` 中尝试创建 class interface 的实例时，编译器需要知道这个 class 完整的类型信息。这涉及到 [module.reach]p5 及其 note：
+
+> The accumulated properties of all reachable declarations of an entity within a context determine the behavior of the entity within that context.
+
+> Note 4: These reachable semantic properties include type completeness, type definitions, initializers, default arguments of functions or template declarations, attributes, names bound, etc. Since default arguments are evaluated in the context of the call expression, the reachable semantic properties of the corresponding parameter types apply in that context.
+
+然后由于 `class interface` 的完整类信息包含 `Impl` 的类型信息，这要求 `Impl` 的定义在 `user.cpp` 中是可达的。但正如上面提到的，`Impl` 的定义在 `user.cpp` 在标准层面是否可达是不确定的。`Impl` 的定义在 `user.cpp` 中 may be considered reachable, but it is unspecified which are and under what circumstances。
+
+## 标准为什么这么制订
+
+在说明了标准的说明后，我们来讨论下标准为什么这么说。
+
+我认为，简单来说，这是为了给实现留下优化空间。
+
+例如，如果实现被允许将所有非直接 import 的 module implemetation partition unit 中的所有内容都标记为 unreachable。这意味着，实现在生成一个 module interface units 中的 BMI 时，可以完全忽略其直接 import 的 module implemetation partition unit。即 module implemetation partition unit 将完全不影响其它的用户的 BMI。
+
+例如：
+
+```C++
+// impl.cppm
+module m:impl;
+struct Impl {
+    int get() {
+        return 43;
+    }
+};
+```
+
+```C++
+// m.cppm
+export module m;
+import :impl;
+export int func() {
+    Impl impl;
+    return impl.get();
+}
+```
+
+然后当我们修改 impl.cppm 时，例如：
+
+```C++
+// impl.cppm
+module m:impl;
+struct Impl {
+    int get() {
+        return 399;
+    }
+};
+```
+
+然后我们重新编译 m.cppm 时，其产出的 BMI 可以保持不变。此时我们可以避免所有 `m.cppm` 的 importee 的重新编译。
+
+(BTW，clang 已经实现了 [Experimental Non-Cascading Changes](https://clang.llvm.org/docs/StandardCPlusPlusModules.html#experimental-non-cascading-changes)， 不过和这里提到的直接忽略 imported module implementation unit 的原理不太一样)
+
+当然以上都是很理想的情况。
+
+读者可能会问，为什么标准不直接规定最理想的情况呢。我觉得主要原因是当时没有足够的实验经验。也许读者此时会习惯性抱怨委员会的设计流程，但在这个小例子上，我觉得委员会务实的态度是比较好的。老实的说 unspecified 比起直接 specified 好很多，务实很多。此外再插一句，我觉得 C++20 Modules 的设计问题是不大的。在语言设计层面有本文提到 module implementation unit 依赖粒度太粗和这里 unspecified 的问题，但这些都是小问题，除了这些小问题之外，Modules 的整体设计我觉得是很完善的。我常常震惊委员会当年可以在缺乏足够实现的前提下做出这种级别的设计。Modules 现在推进缓慢的主要原因还是各个工具链的实现人力资源问题。
+
+我觉得还是不能把标准当许愿机。不能觉得只要把缺乏的特性扔到标准里，然后高质量的实现就会自动长出来。当然这里扯远了，这个话题复杂很多。
+
+## Clang 的选择和情况
+
+Clang 一开始实现 module implementation partition unit 时，对 module implementation partition unit 和 module interface partition unit 的实现策略几乎可以说是一模一样的。我猜测 GCC 和 MSVC 也是这么做的，因为这真的非常自然。
+
+Clang 和其他编译器处理不一样的地方可能就是，Clang 认为不直接 import 的 module implementation partition unit 是 unreachable 的。我们的思考是，我们希望为未来的实现留下优化空间。这样当我们未来某一天引入了这个优化后，Clang 的用户不会面临突然的 break。
+
+而引入这个 warning 的原因是，我们多次收到了这样的 bug reports，但分析后发现这个问题上 clang 的行为都是符合标准的。所以我们引入了这个 warning 帮助用户远离这种问题。对于认为自己完全理解这个问题的用户，可以关闭这个 warning。warning 是可以关闭的。这就是为什么这是一个 warning 而不是一个 error。
+
+但还是需要强调，截止目前为止，根据目前编译器的实现，（我怀疑包括 GCC 和 MSVC），在 interface unit 中 import module implementation partition unit 和 import module interface partition unit 没有区别。这不会带来安慰剂效应之外的任何好处。对于每一个在 interface unit 中 import module implementation partition unit 的情况，我建议用户：
+1. 将该 module implementation partition unit 改为 module interface partition unit。或者，
+2. 去掉该 import。
+
+## 总结
+
+在 module interface unit 中 import module implementation partition unit 在语言上不是错误的。但实践上很容易引入 unspecified 行为。我相信，绝大多数人没有兴趣在开发代码时仔细数这个声明是不是对用户可达的。
+
+
+使用不要在 module interface unit 中 import module implementation partition unit 这个 guide line，可以很大程度上避免这种困惑。提高代码的可移植性。也提高代码的可读性和可维护性，特别是在大型项目中。
+
+而且根据现状 Clang 的实现（我怀疑包括 GCC 和 MSVC），在 interface unit 中 import module implementation partition unit 和 import module interface partition unit 没有区别。这不会带来安慰剂效应之外的任何好处。对于每一个在 interface unit 中 import module implementation partition unit 的情况，我建议用户：
+1. 将该 module implementation partition unit 改为 module interface partition unit。或者，
+2. 去掉该 import。

@@ -122,7 +122,7 @@ Therefore, I recommend using `.cppm` or `.ccm` as the suffix for module interfac
 
 # Providing a C++20 Modules Interface for Header-Based Projects
 
-(A more concise version can be found at https://clang.llvm.org/docs/StandardCPlusPlusModules.html#transitioning-to-modules)
+(A more concise version can be found at [transitioning-to-modules](https://clang.llvm.org/docs/StandardCPlusPlusModules.html#transitioning-to-modules))
 
 Let's use a simple project as an example:
 
@@ -594,7 +594,7 @@ In other words, for a header-only library, you can use a CMake option to make mo
 
 # Modules Native Best Practices
 
-Some background information can be found here: https://clang.llvm.org/docs/StandardCPlusPlusModules.html#background-and-terminology
+Some background information can be found here: [background-and-terminology](https://clang.llvm.org/docs/StandardCPlusPlusModules.html#background-and-terminology)
 
 ## A Project Should Declare Only One Module; Use Module Partition Units for Multiple TUs
 
@@ -879,7 +879,7 @@ Below is my comment on Reddit, which I think serves as a fitting summary here:
 
 (1) In both design and practice, modules can deliver significantly greater compile-time speedups compared to precompiled headers (PCH). Additionally, named modules can reduce the size of build artifacts—something PCH simply cannot do.
 
-(2) The encapsulation provided by modules enables finer-grained dependency and recompilation analysis. Some of this work has already been open-sourced—for example: https://clang.llvm.org/docs/StandardCPlusPlusModules.html#experimental-non-cascading-changes. We have even more such efforts internally, which we plan to gradually open-source in the future.
+(2) The encapsulation provided by modules enables finer-grained dependency and recompilation analysis. Some of this work has already been open-sourced—for example: [experimental-non-cascading-changes](https://clang.llvm.org/docs/StandardCPlusPlusModules.html#experimental-non-cascading-changes). We have even more such efforts internally, which we plan to gradually open-source in the future.
 
 (3) Moreover, the ability of named modules to detect ODR (One Definition Rule) violations genuinely impressed me. I was already aware of, understood, and had personally encountered various ODR violation issues before. However, during our migration, discovering so many previously hidden ODR violations was still quite shocking.
 
@@ -1056,3 +1056,192 @@ add_executable(main SOURCES main.cc DEPENDS libwrapper_v1)
 That said, I believe each case needs individual assessment—it’s hard to devise a universal solution if we don’t fix the ODR violation at its source.
 
 The key point here is to highlight Modules’ ability to expose existing ODR violations.
+
+# Appendix B: Reasons for not `import` Module Implementation Partition Units in Module Interface Units
+
+Because some people are confused about this issue, we will explain it in more depth here.
+
+We place this explanation in an appendix because clarifying it properly requires discussing both the standard’s perspective and implementation details—somewhat contradicting the user-centric focus of this article’s main body.
+
+The reason I emphasize a user perspective is that, in my view, most C++ programmers hope Modules will be a feature that helps them manage complexity—not another source of cognitive overhead. This is precisely the goal of this article: to stress that when toolchains become not only mature but also extremely easy to use, most C++ programmers won’t feel pressured by Modules from a language-feature standpoint.
+
+Therefore, for readers who don’t care about standards or implementations, the key takeaways are:
+
+- Importing a module implementation partition unit in a module interface unit is **not** a language-level error—it’s merely a guideline aimed at reducing mental burden.
+- However, in practice, allowing such imports often leads programmers—especially in large, multi-person C++ projects—to unintentionally write code with **unspecified behavior** as defined by the standard. In the standard’s words: “it is unspecified which are and under what circumstances.”
+- Avoiding such imports prevents this problem entirely.
+- This practice greatly helps programmers understand the boundary between interface and implementation across different components of a project—particularly critical in large, collaborative C++ projects.
+
+I emphasize large collaborative projects because, in my view, roles among C++ project contributors typically fall into three categories:
+
+1. Some people prepare the toolchain and development environment. Naturally, they must also consider the project’s actual runtime environment—the foundation for toolchain setup.
+2. Others define the project’s C++ coding guidelines. Given C++’s complexity, many projects establish their own style rules. These guidelines help unify code style, reduce comprehension costs among team members, and improve maintainability.
+3. The majority focus on the project’s actual logic, where C++ serves primarily as a tool.
+
+Of course, in small or solo projects, these roles often overlap. But as team size grows, lacking consistent C++ guidelines significantly degrades readability and maintainability.
+
+Returning to the main topic, to clarify the rationale behind this guideline, this section is organized as follows:
+
+1. Standard Specification  
+2. Why the Standard Is Defined This Way  
+3. Clang’s Choice and Current State  
+4. Good Examples  
+5. Summary  
+
+## Standard Specification
+
+We quoted this once in the main text; to avoid forcing readers to jump around, we repeat it here:
+
+[module.reach]p2 states:
+
+> All translation units that are necessarily reachable are reachable. Additional translation units on which the point within the program has an interface dependency may be considered reachable, but it is unspecified which are and under what circumstances.
+
+The definition of "necessarily reachable" appears in [module.reach]p1:
+
+> A translation unit U is necessarily reachable from a point P if U is a module interface unit on which the translation unit containing P has an interface dependency, or the translation unit containing P imports U, in either case prior to P.
+
+Thus, "necessarily reachable" refers to directly imported TUs or those with an interface dependency. The definition of "interface dependency" is in [module.import]p10:
+
+> A translation unit has an interface dependency on a translation unit U if it contains a declaration that imports U or if it has an interface dependency on a translation unit that has an interface dependency on U.
+
+In other words, interface dependency includes imported module interface units and those imported recursively.
+
+Then [module.reach]p3 states:
+
+> A declaration D is reachable from a point P if  
+> (3.1) P is a non-synthesized point and  
+> (3.1.1) D appears prior to P in the same translation unit, or  
+> (3.1.2) D is not discarded ([module.global.frag]), appears in a translation unit that is reachable from P, and does not appear within a private-module-fragment;
+
+This means that declarations in a module implementation partition unit may or may not be reachable from a translation unit that does **not** directly import that implementation partition—and the standard leaves it **unspecified under what circumstances** they are reachable.
+
+Furthermore, [module.reach]p5 and its note state:
+
+> The accumulated properties of all reachable declarations of an entity within a context determine the behavior of the entity within that context.
+
+> Note 4: These reachable semantic properties include type completeness, type definitions, initializers, default arguments of functions or template declarations, attributes, names bound, etc. Since default arguments are evaluated in the context of the call expression, the reachable semantic properties of the corresponding parameter types apply in that context.
+
+Footnote 82 adds:
+
+> Implementations are therefore not required to prevent the semantic effects of additional translation units involved in the compilation from being observed.
+
+Consider this example:
+
+```cpp
+// impl.cppm
+module m:impl;
+struct Impl {};
+```
+
+```cpp
+// m.cppm
+export module m;
+import :impl;
+export class interface {
+private:
+    Impl impl;
+public:
+    interface() = default;
+};
+```
+
+```cpp
+// user.cpp
+import m;
+interface i;
+```
+
+Compiling this with Clang (ignoring warnings during module `m` compilation) yields:
+
+```
+$ clang++ -std=c++20 user.cpp -fsyntax-only -fprebuilt-module-path=.
+In file included from user.cpp:1:
+interface.cppm:7:5: error: definition of 'Impl' must be imported from module 'm' before it is required
+    7 |     interface() = default;
+      |     ^
+user.cpp:2:11: note: in defaulted default constructor for 'interface' first required here
+    2 | interface i;
+      |           ^
+impl.cppm:2:8: note: definition here is not reachable
+    2 | struct Impl {};
+      |        ^
+1 error generated.
+```
+
+Other compilers might accept this example—precisely because the standard leaves it **unspecified**.
+
+From the standard’s perspective, Clang rejects this because instantiating `interface` in `user.cpp` requires complete type information for `interface`, which includes the definition of `Impl`. Per [module.reach]p5, the semantic properties of `Impl` must be reachable in `user.cpp`. But since `Impl` is defined in a module implementation partition that `user.cpp` does **not** directly import, its reachability is **unspecified**—it “may be considered reachable, but it is unspecified which are and under what circumstances.”
+
+## Why the Standard Is Defined This Way
+
+Having explained the specification, let’s discuss why the standard is written this way.
+
+In short, it’s to leave room for implementation optimizations.
+
+For instance, an implementation could treat all contents of non-directly-imported module implementation partitions as unreachable. This would allow the compiler, when generating a BMI (Binary Module Interface) for a module interface unit, to completely ignore any imported module implementation partitions. Thus, changes to implementation partitions wouldn’t affect users’ BMIs.
+
+Example:
+
+```cpp
+// impl.cppm
+module m:impl;
+struct Impl {
+    int get() { return 43; }
+};
+```
+
+```cpp
+// m.cppm
+export module m;
+import :impl;
+export int func() {
+    Impl impl;
+    return impl.get();
+}
+```
+
+If we later change `impl.cppm`:
+
+```cpp
+// impl.cppm
+module m:impl;
+struct Impl {
+    int get() { return 399; }
+};
+```
+
+And recompile `m.cppm`, its BMI could remain unchanged—avoiding recompilation of all importers of `m`.
+
+(BTW, Clang already implements [Experimental Non-Cascading Changes](https://clang.llvm.org/docs/StandardCPlusPlusModules.html#experimental-non-cascading-changes), though its mechanism differs slightly from the ideal described above.)
+
+Of course, this is an idealized scenario.
+
+One might ask: why doesn’t the standard just mandate this ideal behavior? I believe the main reason is lack of sufficient implementation experience at the time. While one might instinctively criticize the committee’s design process, in this specific case, I think their pragmatic approach was appropriate. Honestly, marking something as “unspecified” is often better and more realistic than prematurely specifying it. Moreover, I’d argue that C++20 Modules’ design is largely sound. The issues—such as coarse-grained dependencies of module implementation units and this unspecified behavior—are minor. Overall, the design is remarkably solid, especially considering the committee achieved it with limited implementation feedback. The slow adoption today stems mainly from insufficient engineering resources in toolchain development, not fundamental flaws.
+
+We shouldn’t treat the standard as a wish-granting machine—assuming that adding a feature to the standard automatically yields high-quality implementations. But that’s a broader topic beyond our scope.
+
+## Clang’s Choice and Current State
+
+Initially, Clang implemented module implementation partitions almost identically to module interface partitions—a very natural approach. I suspect GCC and MSVC do the same.
+
+Where Clang differs is in treating non-directly-imported module implementation partitions as **unreachable**. Our reasoning: we want to preserve optimization opportunities for future implementations. If we later introduce such optimizations, Clang users won’t face sudden breaks.
+
+We added a warning for this pattern because we repeatedly received bug reports that, upon analysis, revealed Clang was behaving correctly per the standard. The warning helps users avoid pitfalls. Users who fully understand the issue can disable it—which is why it’s a **warning**, not an error.
+
+However, it’s crucial to note: as of now, **all major compilers (including GCC and MSVC, I suspect)** treat `import` of a module implementation partition in an interface unit **identically** to importing an interface partition. There is **no benefit**—beyond placebo—from doing so.
+
+Thus, for every case where a module interface unit imports a module implementation partition, I recommend:
+
+1. Convert that module implementation partition into a module interface partition, **or**  
+2. Remove the import entirely.
+
+## Summary
+
+Importing a module implementation partition unit in a module interface unit is **not** a language error—but in practice, it easily introduces unspecified behavior. Most developers have no interest in meticulously tracking whether a declaration is reachable by users.
+
+Adopting the guideline **“do not import module implementation partition units in module interface units”** greatly avoids such confusion, improves portability, and enhances readability and maintainability—especially in large projects.
+
+Moreover, given current compiler implementations (including, I suspect, GCC and MSVC), importing a module implementation partition in an interface unit offers **no real benefit** over importing an interface partition—only placebo. For every such import, I advise:
+
+1. Convert the module implementation partition to a module interface partition, **or**  
+2. Remove the import.
