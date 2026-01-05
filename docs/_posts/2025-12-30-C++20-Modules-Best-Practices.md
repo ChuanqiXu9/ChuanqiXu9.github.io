@@ -165,7 +165,7 @@ libexample.so:0000000000001110 T example::C::get()
 
 ## export using style
 
-export using style 是为头文件提供 C++20 Module Interface 最简单的办法，包括 libc++、libstdc++ 和 MSSTL 使用的都是这种办法。目前看到的大部分支持 C++20 Modules 的库使用的也是这种办法。
+export using style 是为头文件提供 C++20 Module Interface 最简单的办法，libc++ 和 libstdc++ 使用的都是这种办法。目前看到的大部分支持 C++20 Modules 的库使用的也是这种办法。
 
 这种办法类似：
 
@@ -1216,6 +1216,31 @@ impl.cppm:2:8: note: definition here is not reachable
 > Note 4: These reachable semantic properties include type completeness, type definitions, initializers, default arguments of functions or template declarations, attributes, names bound, etc. Since default arguments are evaluated in the context of the call expression, the reachable semantic properties of the corresponding parameter types apply in that context.
 
 然后由于 `class interface` 的完整类信息包含 `Impl` 的类型信息，这要求 `Impl` 的定义在 `user.cpp` 中是可达的。但正如上面提到的，`Impl` 的定义在 `user.cpp` 在标准层面是否可达是不确定的。`Impl` 的定义在 `user.cpp` 中 may be considered reachable, but it is unspecified which are and under what circumstances。
+
+## 合法的情况
+
+在 module interface 中 import module implementation partition unit 的用法是存在合理情况的。这要求该 module interface 的所有潜在用户满足以下两个条件之一：
+1. 该用户不要求 module implementation partition unit 中的声明对其是可达的。或
+2. 该用户有能力 import 该 module implementation partition unit。这要求该用户与该 module interface 位于同一 module 中。
+
+例如:
+
+```C++
+module m:impl;
+void impl() {}
+```
+
+```C++
+export module m;
+import :impl;
+export void interface() {
+    impl();
+}
+```
+
+这个例子中，虽然我们在 module interface 中 import 了 module implementation partition unit `m:impl`，但这个例子是合法的。
+
+因为 module unit `m` 的任何用户都不需要 `impl()` 的声明或定义（是可达的）。
 
 ## 标准为什么这么制订
 

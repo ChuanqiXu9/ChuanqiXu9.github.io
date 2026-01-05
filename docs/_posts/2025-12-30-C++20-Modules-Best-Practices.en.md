@@ -167,7 +167,7 @@ For authors of header-only libraries and those who distribute source code withou
 
 ## The `export using` Style
 
-The `export using` style is the simplest way to provide a C++20 Module interface for header files. It's the method used by libc++, libstdc++, and MSVC's STL. Most libraries that currently support C++20 Modules also use this approach.
+The `export using` style is the simplest way to provide a C++20 Module interface for header files. It's the method used by libc++ and libstdc++. Most libraries that currently support C++20 Modules also use this approach.
 
 The method looks like this:
 
@@ -1170,6 +1170,32 @@ impl.cppm:2:8: note: definition here is not reachable
 Other compilers might accept this example—precisely because the standard leaves it **unspecified**.
 
 From the standard’s perspective, Clang rejects this because instantiating `interface` in `user.cpp` requires complete type information for `interface`, which includes the definition of `Impl`. Per [module.reach]p5, the semantic properties of `Impl` must be reachable in `user.cpp`. But since `Impl` is defined in a module implementation partition that `user.cpp` does **not** directly import, its reachability is **unspecified**—it “may be considered reachable, but it is unspecified which are and under what circumstances.”
+
+## Legitimate Cases
+
+There are valid scenarios for importing a module implementation partition unit within a module interface unit. This is permissible only if all potential users of that module interface satisfy one of the following two conditions:
+
+1. The user does not require the declarations from the module implementation partition unit to be reachable, **or**
+2. The user is capable of importing that module implementation partition unit—this requires the user to reside within the same module as the module interface.
+
+For example:
+
+```cpp
+module m:impl;
+void impl() {}
+```
+
+```cpp
+export module m;
+import :impl;
+export void interface() {
+    impl();
+}
+```
+
+In this example, although the module interface imports the module implementation partition unit `m:impl`, the code is still legal.
+
+This is because no user of the module unit `m` needs the declaration or definition of `impl()` to be reachable.
 
 ## Why the Standard Is Defined This Way
 
