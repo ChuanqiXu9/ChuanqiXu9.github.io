@@ -830,12 +830,12 @@ If `foo()` and `zoo()` frames are elided, the memory allocated in `entry` looks 
 
 ```
 ┌─────────────────────────────────────────┐
-│           bar() Coroutine Frame          │
+│           bar() Coroutine Frame         │
 │  ┌───────────────────────────────────┐  │
-│  │        foo() Coroutine Frame       │  │
+│  │        foo() Coroutine Frame      │  │
 │  │  ┌─────────────────────────────┐  │  │
-│  │  │       zoo() Coroutine Frame  │  │  │
-│  │  │      Params/Locals + State   │  │  │
+│  │  │       zoo() Coroutine Frame │  │  │
+│  │  │      Params/Locals + State  │  │  │
 │  │  └─────────────────────────────┘  │  │
 │  │                                   │  │
 │  │   Params/Locals + State           │  │
