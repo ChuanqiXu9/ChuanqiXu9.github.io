@@ -1010,7 +1010,17 @@ clang++ -O3 -S -emit-llvm -o - %s
 define dso_local void @zoo()() local_unnamed_addr #2 personality ptr @__gxx_personality_v0 !dbg !24 {
   invoke void @foo()()
           to label %5 unwind label %1, !dbg !25
-; ... landing pad logic ...
+
+1:
+  %2 = landingpad { ptr, i32 }
+          catch ptr null, !dbg !27
+  %3 = extractvalue { ptr, i32 } %2, 0, !dbg !27
+  %4 = tail call ptr @__cxa_begin_catch(ptr %3) #3, !dbg !28
+  tail call void @__cxa_end_catch(), !dbg !29
+  br label %5, !dbg !29
+
+5:
+  ret void, !dbg !31
 }
 ```
 
