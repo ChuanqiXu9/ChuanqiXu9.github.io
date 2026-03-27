@@ -1119,20 +1119,104 @@ The split between Ramp and Resume is based on the first compile-time determinabl
 Example `bar()` with `always_suspend`:
 
 ```llvm
-define dso_local void @bar()(...) {
-  // ... simple allocation and init ...
+define dso_local void @bar()(ptr dead_on_unwind writable writeonly sret(%struct.Task) align 8 captures(none) initializes((0, 8)) %0) local_unnamed_addr #0 personality ptr @__gxx_personality_v0 {
+  %2 = tail call noundef nonnull align 8 dereferenceable(8) ptr @std::basic_ostream<char, std::char_traits<char>>& std::__ostream_insert<char, std::char_traits<char>>(std::basic_ostream<char, std::char_traits<char>>&, char const*, long)(ptr noundef nonnull align 8 dereferenceable(8) @std::cout, ptr noundef nonnull @.str, i64 noundef 20)
+  %3 = tail call noundef nonnull align 8 dereferenceable(8) ptr @std::ostream& std::ostream::_M_insert<unsigned long>(unsigned long)(ptr noundef nonnull align 8 dereferenceable(8) @std::cout, i64 noundef 96)
+  %4 = tail call noundef nonnull align 8 dereferenceable(8) ptr @std::basic_ostream<char, std::char_traits<char>>& std::__ostream_insert<char, std::char_traits<char>>(std::basic_ostream<char, std::char_traits<char>>&, char const*, long)(ptr noundef nonnull align 8 dereferenceable(8) %3, ptr noundef nonnull @.str.1, i64 noundef 7)
+  %5 = tail call noalias noundef nonnull dereferenceable(96) ptr @operator new(unsigned long)(i64 noundef 96) #28
+  store ptr @bar() (.resume), ptr %5, align 8
+  %6 = getelementptr inbounds nuw i8, ptr %5, i64 8
+  store ptr @bar() (.destroy), ptr %6, align 8
+  %7 = getelementptr inbounds nuw i8, ptr %5, i64 16
+  store i32 0, ptr %7, align 8
+  %8 = getelementptr inbounds nuw i8, ptr %5, i64 24
+  store ptr null, ptr %8, align 8
+  store ptr %5, ptr %0, align 8
+  %9 = getelementptr inbounds nuw i8, ptr %5, i64 88
+  store i2 0, ptr %9, align 8
   ret void
 }
 ```
 
 If we change `initial_suspend` to `suspend_never`:
 
+
 ```llvm
-define dso_local void @bar()(...) {
-  // ... allocation ...
-  // ... invokes for logging/setup ...
-  // ... includes ALL Resume function content ...
-  // ... complex cleanup/landing pads ...
+define dso_local void @bar()(ptr dead_on_unwind writable writeonly sret(%struct.Task) align 8 captures(none) initializes((0, 8)) %0) local_unnamed_addr #0 personality ptr @__gxx_personality_v0 {
+  %2 = tail call noundef nonnull align 8 dereferenceable(8) ptr @std::basic_ostream<char, std::char_traits<char>>& std::__ostream_insert<char, std::char_traits<char>>(std::basic_ostream<char, std::char_traits<char>>&, char const*, long)(ptr noundef nonnull align 8 dereferenceable(8) @std::cout, ptr noundef nonnull @.str, i64 noundef 20)
+  %3 = tail call noundef nonnull align 8 dereferenceable(8) ptr @std::ostream& std::ostream::_M_insert<unsigned long>(unsigned long)(ptr noundef nonnull align 8 dereferenceable(8) @std::cout, i64 noundef 56)
+  %4 = tail call noundef nonnull align 8 dereferenceable(8) ptr @std::basic_ostream<char, std::char_traits<char>>& std::__ostream_insert<char, std::char_traits<char>>(std::basic_ostream<char, std::char_traits<char>>&, char const*, long)(ptr noundef nonnull align 8 dereferenceable(8) %3, ptr noundef nonnull @.str.1, i64 noundef 7)
+  %5 = tail call noalias noundef nonnull dereferenceable(56) ptr @operator new(unsigned long)(i64 noundef 56) #27
+  store ptr @bar() (.resume), ptr %5, align 8
+  %6 = getelementptr inbounds nuw i8, ptr %5, i64 8
+  store ptr @bar() (.destroy), ptr %6, align 8
+  %7 = getelementptr inbounds nuw i8, ptr %5, i64 16
+  store i32 0, ptr %7, align 8
+  %8 = getelementptr inbounds nuw i8, ptr %5, i64 24
+  store ptr null, ptr %8, align 8
+  store ptr %5, ptr %0, align 8
+  %9 = invoke noundef nonnull align 8 dereferenceable(8) ptr @std::basic_ostream<char, std::char_traits<char>>& std::__ostream_insert<char, std::char_traits<char>>(std::basic_ostream<char, std::char_traits<char>>&, char const*, long)(ptr noundef nonnull align 8 dereferenceable(8) @std::cout, ptr noundef nonnull @.str, i64 noundef 20)
+          to label %10 unwind label %25
+
+10:
+  %11 = invoke noundef nonnull align 8 dereferenceable(8) ptr @std::ostream& std::ostream::_M_insert<unsigned long>(unsigned long)(ptr noundef nonnull align 8 dereferenceable(8) @std::cout, i64 noundef 48)
+          to label %12 unwind label %25
+
+12:
+  %13 = invoke noundef nonnull align 8 dereferenceable(8) ptr @std::basic_ostream<char, std::char_traits<char>>& std::__ostream_insert<char, std::char_traits<char>>(std::basic_ostream<char, std::char_traits<char>>&, char const*, long)(ptr noundef nonnull align 8 dereferenceable(8) %11, ptr noundef nonnull @.str.1, i64 noundef 7)
+          to label %14 unwind label %25
+
+14:
+  %15 = invoke noalias noundef nonnull dereferenceable(48) ptr @operator new(unsigned long)(i64 noundef 48) #27
+          to label %16 unwind label %25
+
+16:
+  %17 = getelementptr inbounds nuw i8, ptr %5, i64 40
+  store ptr %15, ptr %17, align 8
+  %18 = getelementptr inbounds nuw i8, ptr %15, i64 8
+  store ptr @foo() (.destroy), ptr %18, align 8
+  %19 = getelementptr inbounds nuw i8, ptr %15, i64 32
+  %20 = getelementptr inbounds nuw i8, ptr %15, i64 16
+  %21 = getelementptr inbounds nuw i8, ptr %15, i64 24
+  store ptr null, ptr %21, align 8
+  store i32 43, ptr %20, align 8
+  store ptr null, ptr %19, align 8
+  store ptr null, ptr %15, align 8
+  %22 = getelementptr inbounds nuw i8, ptr %15, i64 40
+  store i1 false, ptr %22, align 8
+  %23 = load ptr, ptr @std::__n4861::coroutine_handle<std::__n4861::noop_coroutine_promise>::_S_fr, align 8
+  invoke fastcc void %23(ptr nonnull @std::__n4861::coroutine_handle<std::__n4861::noop_coroutine_promise>::_S_fr)
+          to label %24 unwind label %25
+
+24:
+  unreachable
+
+25:
+  %26 = landingpad { ptr, i32 }
+          catch ptr null
+  %27 = extractvalue { ptr, i32 } %26, 0
+  %28 = tail call ptr @__cxa_begin_catch(ptr %27) #23
+  invoke void @__cxa_end_catch()
+          to label %29 unwind label %36
+
+29:
+  %30 = getelementptr inbounds nuw i8, ptr %5, i64 32
+  %31 = load ptr, ptr %8, align 8
+  store ptr %31, ptr %30, align 8
+  store ptr null, ptr %5, align 8
+  %32 = getelementptr inbounds nuw i8, ptr %5, i64 48
+  store i1 true, ptr %32, align 8
+  %33 = icmp eq ptr %31, null
+  %34 = select i1 %33, ptr @std::__n4861::coroutine_handle<std::__n4861::noop_coroutine_promise>::_S_fr, ptr %31
+  %35 = load ptr, ptr %34, align 8
+  tail call fastcc void %35(ptr nonnull %34)
+  ret void
+
+36:
+  %37 = landingpad { ptr, i32 }
+          cleanup
+  tail call void @operator delete(void*, unsigned long)(ptr noundef nonnull %5, i64 noundef 56) #23
+  resume { ptr, i32 } %37
 }
 ```
 
