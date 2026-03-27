@@ -957,7 +957,9 @@ Advantages over static CoroElide:
 3. Avoids excessive memory overhead from premature large allocations.
 
 I have implemented a draft in the compiler: https://github.com/ChuanqiXu9/llvm-project/tree/StackedAllocation
+
 Library implementation: https://github.com/alibaba/async_simple/commit/a13f69eb408fb7e7ce25ca1f75f42e84931ab711
+
 Interested users can try this branch or test the implementation in their own coroutine libraries. I plan to test this on large-scale applications soon.
 
 ## Summary
