@@ -191,7 +191,7 @@ Regarding the second point, readers interested in language design may feel this 
 
 *Note: Another reason LLVM chose to implement coroutines in the middle-end is that coroutine semantics might be reusable across other languages. Subsequently, Swift coroutines and one of MLIR's dialects were implemented based on LLVM Coroutines capabilities.*
 
-# Coroutine Frame Generation & Tips for RedFrame Size
+# Coroutine Frame Generation & Tips for Reducing Frame Size
 
 Clang’s algorithm for generating coroutine frames roughly involves checking every local variable, temporary variable, and parameter to determine if its lifetime crosses any suspend points. If it does, it is placed in the coroutine frame; otherwise, it is not. In practice, due to optimizations, many source-level local variables and parameters may be optimized away, making the coroutine frame smaller than the sum of all locals, temporaries, and parameters in the source code.
 
