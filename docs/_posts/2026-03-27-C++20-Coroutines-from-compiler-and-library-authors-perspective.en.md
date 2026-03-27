@@ -849,8 +849,28 @@ We must allocate `sizeof(bar's self states) + sizeof(foo's self states) + sizeof
 
 If `foo()` and `zoo()` frames are dynamically allocated on demand, actual memory usage decreases before `foo()`/`zoo()` execute or after they finish:
 
-*(Graph 1: Elided - High Peak Memory)*
-*(Graph 2: Non-Elided - Lower Average/Peak Memory over time)*
+```
+Memory
+  ▲  ┌────────────────────────────────────────────────────────────┐
+  │  │█████████████████████████████ bar + foo + zoo ██████████████│
+  │  │████████████████████████████████████████████████████████████│
+  │  │████████████████████████████████████████████████████████████│
+  │  │████████████████████████████████████████████████████████████│
+  └──┴────────────────────────────────────────────────────────────┴──▶ time
+     bar.start                                                      bar.end
+
+```
+
+```
+Memory
+  ▲  ┌────────────────────────────────────────────────────────────┐
+  │  │                    ███████████████████                     │
+  │  │                    ███████████████████                     │
+  │  │         ███████████████████████████████████████            │
+  │  │████████████████████████████████████████████████████████████│
+  └──┴────────────────────────────────────────────────────────────┴──▶ time
+     bar.start foo.start() zoo.start     zoo.end   foo.end         bar.end
+```
 
 As the coroutine chain grows, elision might lead to higher memory peaks and sustained high memory usage.
 
