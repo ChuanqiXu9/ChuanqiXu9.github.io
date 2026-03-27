@@ -182,7 +182,7 @@ Task my_coro() {
   - 为了让中端有更多语言相关信息以完成优化和正确的处理，我们需要在 LLVM 中不断暴露接口，以接受 Clang 侧传来的信息。
   - 我们在前端完全失去了中端优化结果的信息（这是当然的)，从而让我们无法在前端对涉及到中端优化结果信息的事项做进一步的操作与涉及。简而言之，这个决定缩小了 C++ 在语言层面对协程的设计空间。
 
-对于前者，一个具体的例子是 C++20 协程的 Debuggability。其他语言构造的 Debug info 是编译器在前端生成代码时一齐生成的，中端只需要处理这些 Debug Info IR 即可。而对于协程，因为 Clang 中前端生成代码时协程的编译并没有完成，这使得 Clang 前端生成协程时的 Debug Info 并不能匹配真实的协程代码。导致 Clang 生成的 C++20 协程的 Debuggability 受到了影响。虽然后来我们在 LLVM 中端进行协程转化时生成了 Debug Info 来缓解这一点。对细节感兴趣的读者可以看 (Debugging C++ Coroutines)[https://clang.llvm.org/docs/DebuggingCoroutines.html]。但开启优化后 C++20 协程的 Debuggability 肯定是比不上 GCC 的，毕竟 GCC 不会优化协程。除了 Debugability 之外，其他的问题更多是因为中端缺乏信息，所以时不时会有新的 bug 出现，当然这点在 2026 年的今天对用户的影响已经比较有限了。
+对于前者，一个具体的例子是 C++20 协程的 Debuggability。其他语言构造的 Debug info 是编译器在前端生成代码时一齐生成的，中端只需要处理这些 Debug Info IR 即可。而对于协程，因为 Clang 中前端生成代码时协程的编译并没有完成，这使得 Clang 前端生成协程时的 Debug Info 并不能匹配真实的协程代码。导致 Clang 生成的 C++20 协程的 Debuggability 受到了影响。虽然后来我们在 LLVM 中端进行协程转化时生成了 Debug Info 来缓解这一点。对细节感兴趣的读者可以看 [Debugging C++ Coroutines](https://clang.llvm.org/docs/DebuggingCoroutines.html) 。但开启优化后 C++20 协程的 Debuggability 肯定是比不上 GCC 的，毕竟 GCC 不会优化协程。除了 Debugability 之外，其他的问题更多是因为中端缺乏信息，所以时不时会有新的 bug 出现，当然这点在 2026 年的今天对用户的影响已经比较有限了。
 
 而对于后者，可能对语言设计感兴趣的读者会有更强的感触。希望对协程进行进一步设计/增强的人，在涉及到协程帧相关的事情时，往往会显得局促。因为前端/语言对于协程帧的具体组成基本上是一无所知或者全放权给编译器中端的。强行增加新的约束几乎总会导致编译器在某种情况下生成更差的代码，在本文后面的章节会尝试举一个具体的例子。
 
